@@ -51,6 +51,12 @@ Expand-Archive -Path "try.zip" -DestinationPath "." -Force
 Move-Item -Path "try.exe" -Destination "$env:USERPROFILE\bin\try.exe" -Force
 ```
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install amulcse/tap/try
+```
+
 ### Go Install
 
 If you have Go installed:

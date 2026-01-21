@@ -79,3 +79,27 @@ release:
   footer: |
     ---
     All credit for the original idea goes to [Tobi Lütke](https://github.com/tobi) and [try](https://github.com/tobi/try).
+
+brews:
+  - name: try
+    repository:
+      owner: amulcse
+      name: homebrew-tap
+    homepage: "https://github.com/amulcse/try"
+    description: "Fresh directories for every vibe - ephemeral workspace manager"
+    license: "MIT"
+    folder: Formula
+    install: |
+      bin.install "try"
+    caveats: |
+      To complete installation, add this to your shell config:
+
+      For bash/zsh (~/.bashrc or ~/.zshrc):
+        eval "$(try init)"
+
+      For fish (~/.config/fish/config.fish):
+        eval (try init | string collect)
+
+      Then restart your terminal.
+    test: |
+      system "#{bin}/try", "--version"
