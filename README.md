@@ -9,18 +9,16 @@
 
 ---
 
-## Quick Start (No Cloning Required!)
+## Quick Start (2 Steps)
 
-### One-Line Install
+### Step 1: Install the Binary
 
-**macOS / Linux:**
+**One-Line Install (Recommended):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amulcse/try/main/install.sh | bash
 ```
 
-### Manual Binary Download
-
-Download the binary for your platform, make it executable, and move to your PATH:
+**Or Manual Download:**
 
 **macOS (Apple Silicon):**
 ```bash
@@ -60,23 +58,24 @@ If you have Go installed:
 go install github.com/amulcse/try@latest
 ```
 
----
+### Step 2: Add to Shell Config (Required!)
 
-## Shell Setup (Required)
+> ⚠️ **Without this step, `try` will only print commands instead of executing them!**
 
-After installing the binary, add this to your shell config:
-
-**Bash / Zsh** (`~/.bashrc` or `~/.zshrc`):
+**Bash / Zsh** - Add to `~/.bashrc` or `~/.zshrc`:
 ```bash
 eval "$(try init)"
 ```
 
-**Fish** (`~/.config/fish/config.fish`):
+**Fish** - Add to `~/.config/fish/config.fish`:
 ```fish
 eval (try init | string collect)
 ```
 
-Then restart your shell or run `source ~/.zshrc`.
+**Then restart your terminal** or run:
+```bash
+source ~/.zshrc  # or ~/.bashrc
+```
 
 ---
 
