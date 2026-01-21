@@ -5,11 +5,9 @@ import (
 	"io"
 	"math"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -210,14 +208,10 @@ func (s *TrySelector) setupTerminal() {
 		s.io.Sync() // Flush to ensure alternate screen is active
 	}
 
-	// Handle window resize
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGWINCH)
-	go func() {
-		for range sigCh {
-			s.needsRedraw = true
-		}
-	}()
+	// Handle window resize (Unix only, no-op on Windows)
+	setupResizeHandler(func() {
+		s.needsRedraw = true
+	})
 }
 
 func (s *TrySelector) restoreTerminal() {
