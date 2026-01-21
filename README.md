@@ -15,7 +15,7 @@
 
 **One-Line Install (Recommended):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/amulcse/try/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/amulcse/try/main/scripts/install.sh | bash
 ```
 
 **Or Manual Download:**
@@ -61,7 +61,7 @@ brew install amulcse/tap/try
 
 If you have Go installed:
 ```bash
-go install github.com/amulcse/try@latest
+go install github.com/amulcse/try/cmd/try@latest
 ```
 
 ### Step 2: Add to Shell Config (Required!)

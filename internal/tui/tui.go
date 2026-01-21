@@ -1,8 +1,8 @@
-package main
+// Package tui provides the terminal user interface for try
+package tui
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amulcse/try/internal/fuzzy"
 	"golang.org/x/term"
 )
 
@@ -18,7 +19,6 @@ const (
 	ansiClearEOL      = "\x1b[K"
 	ansiClearScreen   = "\x1b[2J"
 	ansiHome          = "\x1b[H"
-	ansiHide          = "\x1b[?25l"
 	ansiShow          = "\x1b[?25h"
 	ansiCursorBlink   = "\x1b[1 q"
 	ansiCursorDefault = "\x1b[0 q"
@@ -26,9 +26,7 @@ const (
 	ansiAltScreenOff  = "\x1b[?1049l"
 	ansiReset         = "\x1b[0m"
 	ansiResetFG       = "\x1b[39m"
-	ansiResetBG       = "\x1b[49m"
 	ansiBold          = "\x1b[1m"
-	ansiDim           = "\x1b[2m"
 	ansiReverse       = "\x1b[7m"
 	ansiReverseOff    = "\x1b[27m"
 
@@ -42,10 +40,12 @@ const (
 
 var colorsEnabled = true
 
+// DisableColors disables ANSI color output
 func DisableColors() {
 	colorsEnabled = false
 }
 
+// EnableColors enables ANSI color output
 func EnableColors() {
 	colorsEnabled = true
 }
@@ -73,8 +73,8 @@ func accent(text string) string {
 	return ansiWrap(text, colorAccent, ansiResetFG+"\x1b[22m")
 }
 
-// TryItem represents a directory entry
-type TryItem struct {
+// Item represents a directory entry
+type Item struct {
 	Text      string
 	Basename  string
 	Path      string
@@ -84,9 +84,9 @@ type TryItem struct {
 	BaseScore float64
 }
 
-// TryEntry wraps a TryItem with match data
-type TryEntry struct {
-	Item               TryItem
+// Entry wraps an Item with match data
+type Entry struct {
+	Item               Item
 	Score              float64
 	HighlightPositions []int
 }
@@ -107,15 +107,15 @@ type DeletePath struct {
 	Basename string
 }
 
-// TrySelector is the interactive TUI selector
-type TrySelector struct {
+// Selector is the interactive TUI selector
+type Selector struct {
 	searchTerm      string
 	cursorPos       int
 	inputCursorPos  int
 	scrollOffset    int
 	inputBuffer     string
 	selected        *SelectionResult
-	allTries        []TryItem
+	allTries        []Item
 	basePath        string
 	deleteStatus    string
 	deleteMode      bool
@@ -125,23 +125,23 @@ type TrySelector struct {
 	testKeys        []string
 	testHadKeys     bool
 	testConfirm     string
-	needsRedraw     bool
-	fuzzy           *Fuzzy
+	NeedsRedraw     bool
+	matcher         *fuzzy.Matcher
 	io              *os.File
 	oldState        *term.State
 	width           int
 	height          int
 }
 
-// NewTrySelector creates a new TrySelector
-func NewTrySelector(searchTerm, basePath, andType string, andExit bool, andKeys []string, andConfirm string) *TrySelector {
+// NewSelector creates a new Selector
+func NewSelector(searchTerm, basePath, andType string, andExit bool, andKeys []string, andConfirm string) *Selector {
 	initialInput := searchTerm
 	if andType != "" {
 		initialInput = andType
 	}
 	initialInput = strings.ReplaceAll(initialInput, " ", "-")
 
-	s := &TrySelector{
+	s := &Selector{
 		searchTerm:      strings.ReplaceAll(searchTerm, " ", "-"),
 		inputBuffer:     initialInput,
 		inputCursorPos:  len(initialInput),
@@ -166,7 +166,7 @@ func NewTrySelector(searchTerm, basePath, andType string, andExit bool, andKeys 
 }
 
 // Run starts the TUI and returns the selection result
-func (s *TrySelector) Run() *SelectionResult {
+func (s *Selector) Run() *SelectionResult {
 	s.setupTerminal()
 	defer s.restoreTerminal()
 
@@ -197,7 +197,7 @@ func (s *TrySelector) Run() *SelectionResult {
 	return s.selected
 }
 
-func (s *TrySelector) setupTerminal() {
+func (s *Selector) setupTerminal() {
 	s.refreshSize()
 
 	if !s.testNoCls {
@@ -209,12 +209,12 @@ func (s *TrySelector) setupTerminal() {
 	}
 
 	// Handle window resize (Unix only, no-op on Windows)
-	setupResizeHandler(func() {
-		s.needsRedraw = true
+	SetupResizeHandler(func() {
+		s.NeedsRedraw = true
 	})
 }
 
-func (s *TrySelector) restoreTerminal() {
+func (s *Selector) restoreTerminal() {
 	if s.oldState != nil {
 		term.Restore(int(os.Stdin.Fd()), s.oldState)
 	}
@@ -227,7 +227,7 @@ func (s *TrySelector) restoreTerminal() {
 	}
 }
 
-func (s *TrySelector) refreshSize() {
+func (s *Selector) refreshSize() {
 	// Check environment overrides first
 	if w := os.Getenv("TRY_WIDTH"); w != "" {
 		fmt.Sscanf(w, "%d", &s.width)
@@ -257,19 +257,19 @@ func (s *TrySelector) refreshSize() {
 	}
 }
 
-func (s *TrySelector) loadAllTries() {
+func (s *Selector) loadAllTries() {
 	if s.allTries != nil {
 		return
 	}
 
 	entries, err := os.ReadDir(s.basePath)
 	if err != nil {
-		s.allTries = []TryItem{}
+		s.allTries = []Item{}
 		return
 	}
 
 	now := time.Now()
-	s.allTries = make([]TryItem, 0, len(entries))
+	s.allTries = make([]Item, 0, len(entries))
 
 	for _, entry := range entries {
 		name := entry.Name()
@@ -295,7 +295,7 @@ func (s *TrySelector) loadAllTries() {
 			baseScore += 2.0
 		}
 
-		s.allTries = append(s.allTries, TryItem{
+		s.allTries = append(s.allTries, Item{
 			Text:      name,
 			Basename:  name,
 			Path:      path,
@@ -306,17 +306,33 @@ func (s *TrySelector) loadAllTries() {
 	}
 }
 
-func (s *TrySelector) getTries() []TryEntry {
+func (s *Selector) getTries() []Entry {
 	s.loadAllTries()
-	if s.fuzzy == nil {
-		s.fuzzy = NewFuzzy(s.allTries)
+	if s.matcher == nil {
+		items := make([]fuzzy.Item, len(s.allTries))
+		for i, t := range s.allTries {
+			items[i] = fuzzy.Item{
+				Text:      t.Text,
+				Path:      t.Path,
+				BaseScore: t.BaseScore,
+			}
+		}
+		s.matcher = fuzzy.New(items)
 	}
 
-	matches := s.fuzzy.Match(s.inputBuffer)
-	results := make([]TryEntry, 0, len(matches))
+	matches := s.matcher.Match(s.inputBuffer)
+	results := make([]Entry, 0, len(matches))
 	for _, m := range matches {
-		results = append(results, TryEntry{
-			Item:               m.Entry,
+		// Find the original item
+		var item Item
+		for _, t := range s.allTries {
+			if t.Path == m.Entry.Path {
+				item = t
+				break
+			}
+		}
+		results = append(results, Entry{
+			Item:               item,
 			Score:              m.Score,
 			HighlightPositions: m.Positions,
 		})
@@ -324,7 +340,7 @@ func (s *TrySelector) getTries() []TryEntry {
 	return results
 }
 
-func (s *TrySelector) mainLoop() {
+func (s *Selector) mainLoop() {
 	for {
 		tries := s.getTries()
 		showCreateNew := s.inputBuffer != ""
@@ -474,7 +490,7 @@ func (s *TrySelector) mainLoop() {
 	}
 }
 
-func (s *TrySelector) readKey() string {
+func (s *Selector) readKey() string {
 	if s.testKeys != nil && len(s.testKeys) > 0 {
 		key := s.testKeys[0]
 		s.testKeys = s.testKeys[1:]
@@ -489,16 +505,16 @@ func (s *TrySelector) readKey() string {
 	buf := make([]byte, 6)
 	n, err := os.Stdin.Read(buf)
 	if err != nil {
-		if s.needsRedraw {
-			s.needsRedraw = false
+		if s.NeedsRedraw {
+			s.NeedsRedraw = false
 			s.refreshSize()
 			return ""
 		}
 		return ""
 	}
 
-	if s.needsRedraw {
-		s.needsRedraw = false
+	if s.NeedsRedraw {
+		s.NeedsRedraw = false
 		s.refreshSize()
 		if !s.testNoCls {
 			fmt.Fprint(s.io, ansiClearScreen+ansiHome)
@@ -509,7 +525,7 @@ func (s *TrySelector) readKey() string {
 	return string(buf[:n])
 }
 
-func (s *TrySelector) render(tries []TryEntry) {
+func (s *Selector) render(tries []Entry) {
 	s.refreshSize()
 	var out strings.Builder
 
@@ -615,17 +631,17 @@ func (s *TrySelector) render(tries []TryEntry) {
 	s.io.WriteString(out.String())
 }
 
-func (s *TrySelector) renderHeaderLine(emoji, text string) string {
+func (s *Selector) renderHeaderLine(emoji, text string) string {
 	return emoji + text
 }
 
-func (s *TrySelector) renderSearchLine() string {
+func (s *Selector) renderSearchLine() string {
 	prefix := dim("Search: ")
 	input := s.renderInput(s.inputBuffer, s.inputCursorPos)
 	return prefix + input
 }
 
-func (s *TrySelector) renderInput(text string, cursor int) string {
+func (s *Selector) renderInput(text string, cursor int) string {
 	if text == "" {
 		return dim("")
 	}
@@ -653,7 +669,7 @@ func (s *TrySelector) renderInput(text string, cursor int) string {
 	return out.String()
 }
 
-func (s *TrySelector) renderEntryLine(entry TryEntry, isSelected bool) string {
+func (s *Selector) renderEntryLine(entry Entry, isSelected bool) string {
 	isMarked := indexOf(s.markedForDelete, entry.Item.Path) >= 0
 	var out strings.Builder
 
@@ -682,7 +698,7 @@ func (s *TrySelector) renderEntryLine(entry TryEntry, isSelected bool) string {
 	plainName, renderedName := s.formattedEntryName(entry)
 
 	// Metadata (right-aligned)
-	meta := fmt.Sprintf("%s, %.1f", formatRelativeTime(entry.Item.Mtime), entry.Score)
+	meta := fmt.Sprintf("%s, %.1f", FormatRelativeTime(entry.Item.Mtime), entry.Score)
 
 	// Calculate available width (max content = width - 1 to avoid wrapping)
 	maxContent := s.width - 1
@@ -712,7 +728,7 @@ func (s *TrySelector) renderEntryLine(entry TryEntry, isSelected bool) string {
 	return out.String()
 }
 
-func (s *TrySelector) formattedEntryName(entry TryEntry) (plain, rendered string) {
+func (s *Selector) formattedEntryName(entry Entry) (plain, rendered string) {
 	basename := entry.Item.Basename
 	positions := entry.HighlightPositions
 
@@ -726,7 +742,7 @@ func (s *TrySelector) formattedEntryName(entry TryEntry) (plain, rendered string
 		var rendered strings.Builder
 		rendered.WriteString(dim(datePart))
 		// Hyphen highlight check
-		if contains(positions, 10) {
+		if containsInt(positions, 10) {
 			rendered.WriteString(highlight("-"))
 		} else {
 			rendered.WriteString(dim("-"))
@@ -742,7 +758,7 @@ func (s *TrySelector) formattedEntryName(entry TryEntry) (plain, rendered string
 func highlightWithPositions(text string, positions []int, offset int) string {
 	var result strings.Builder
 	for i, ch := range text {
-		if contains(positions, i+offset) {
+		if containsInt(positions, i+offset) {
 			result.WriteString(highlight(string(ch)))
 		} else {
 			result.WriteString(string(ch))
@@ -751,7 +767,7 @@ func highlightWithPositions(text string, positions []int, offset int) string {
 	return result.String()
 }
 
-func (s *TrySelector) renderCreateLine(isSelected bool) string {
+func (s *Selector) renderCreateLine(isSelected bool) string {
 	var out strings.Builder
 
 	if isSelected && colorsEnabled {
@@ -774,7 +790,7 @@ func (s *TrySelector) renderCreateLine(isSelected bool) string {
 	return out.String()
 }
 
-func (s *TrySelector) renderDeleteModeFooter() string {
+func (s *Selector) renderDeleteModeFooter() string {
 	var out strings.Builder
 	if colorsEnabled {
 		out.WriteString(colorDangerBG)
@@ -784,7 +800,7 @@ func (s *TrySelector) renderDeleteModeFooter() string {
 	return out.String()
 }
 
-func (s *TrySelector) centerText(text string) string {
+func (s *Selector) centerText(text string) string {
 	textWidth := visibleLen(text)
 	padding := (s.width - textWidth) / 2
 	if padding < 0 {
@@ -793,21 +809,21 @@ func (s *TrySelector) centerText(text string) string {
 	return strings.Repeat(" ", padding) + text
 }
 
-func (s *TrySelector) truncateLine(line string) string {
+func (s *Selector) truncateLine(line string) string {
 	if visibleLen(line) <= s.width-1 {
 		return line
 	}
 	return truncateWithAnsi(line, s.width-2) + "…"
 }
 
-func (s *TrySelector) handleSelection(entry TryEntry) {
+func (s *Selector) handleSelection(entry Entry) {
 	s.selected = &SelectionResult{
 		Type: "cd",
 		Path: entry.Item.Path,
 	}
 }
 
-func (s *TrySelector) handleCreateNew() {
+func (s *Selector) handleCreateNew() {
 	datePrefix := time.Now().Format("2006-01-02")
 
 	if s.inputBuffer != "" {
@@ -824,9 +840,9 @@ func (s *TrySelector) handleCreateNew() {
 	s.selected = nil
 }
 
-func (s *TrySelector) confirmBatchDelete(tries []TryEntry) {
+func (s *Selector) confirmBatchDelete(tries []Entry) {
 	// Find marked items
-	markedItems := []TryEntry{}
+	markedItems := []Entry{}
 	for _, t := range tries {
 		if indexOf(s.markedForDelete, t.Item.Path) >= 0 {
 			markedItems = append(markedItems, t)
@@ -890,7 +906,7 @@ func (s *TrySelector) confirmBatchDelete(tries []TryEntry) {
 	}
 }
 
-func (s *TrySelector) renderDeleteDialog(markedItems []TryEntry, confirmation string, cursor int) {
+func (s *Selector) renderDeleteDialog(markedItems []Entry, confirmation string, cursor int) {
 	var out strings.Builder
 	out.WriteString(ansiHome)
 
@@ -940,7 +956,7 @@ func (s *TrySelector) renderDeleteDialog(markedItems []TryEntry, confirmation st
 	s.io.WriteString(out.String())
 }
 
-func (s *TrySelector) processDeleteConfirmation(markedItems []TryEntry, confirmation string) {
+func (s *Selector) processDeleteConfirmation(markedItems []Entry, confirmation string) {
 	if confirmation == "YES" {
 		baseReal, err := filepath.EvalSymlinks(s.basePath)
 		if err != nil {
@@ -975,7 +991,7 @@ func (s *TrySelector) processDeleteConfirmation(markedItems []TryEntry, confirma
 		}
 		s.deleteStatus = "Deleted: " + strings.Join(names, ", ")
 		s.allTries = nil
-		s.fuzzy = nil
+		s.matcher = nil
 		s.markedForDelete = nil
 		s.deleteMode = false
 	} else {
@@ -985,7 +1001,7 @@ func (s *TrySelector) processDeleteConfirmation(markedItems []TryEntry, confirma
 	}
 }
 
-func (s *TrySelector) runRenameDialog(entry TryEntry) {
+func (s *Selector) runRenameDialog(entry Entry) {
 	s.deleteMode = false
 	s.markedForDelete = nil
 
@@ -1007,7 +1023,7 @@ func (s *TrySelector) runRenameDialog(entry TryEntry) {
 			renameError = result
 
 		case "\x1b", "\x03":
-			s.needsRedraw = true
+			s.NeedsRedraw = true
 			return
 
 		case "\x7f", "\x08": // Backspace (DEL) or Ctrl-H
@@ -1061,7 +1077,7 @@ func (s *TrySelector) runRenameDialog(entry TryEntry) {
 	}
 }
 
-func (s *TrySelector) renderRenameDialog(currentName, renameBuffer string, renameCursor int, renameError string) {
+func (s *Selector) renderRenameDialog(currentName, renameBuffer string, renameCursor int, renameError string) {
 	var out strings.Builder
 	out.WriteString(ansiHome)
 
@@ -1107,7 +1123,7 @@ func (s *TrySelector) renderRenameDialog(currentName, renameBuffer string, renam
 	s.io.WriteString(out.String())
 }
 
-func (s *TrySelector) finalizeRename(entry TryEntry, renameBuffer string) string {
+func (s *Selector) finalizeRename(entry Entry, renameBuffer string) string {
 	newName := strings.TrimSpace(strings.ReplaceAll(renameBuffer, " ", "-"))
 	oldName := entry.Item.Basename
 
@@ -1118,7 +1134,7 @@ func (s *TrySelector) finalizeRename(entry TryEntry, renameBuffer string) string
 		return "Name cannot contain /"
 	}
 	if newName == oldName {
-		s.needsRedraw = true
+		s.NeedsRedraw = true
 		return "" // No change, just exit
 	}
 	if _, err := os.Stat(filepath.Join(s.basePath, newName)); err == nil {
@@ -1159,7 +1175,7 @@ func indexOf(slice []string, item string) int {
 	return -1
 }
 
-func contains(slice []int, item int) bool {
+func containsInt(slice []int, item int) bool {
 	for _, s := range slice {
 		if s == item {
 			return true
@@ -1223,7 +1239,28 @@ func truncateWithAnsi(text string, maxLen int) string {
 	return strings.TrimRight(result.String(), " ")
 }
 
-// Write raw bytes to writer
-func writeBytes(w io.Writer, data []byte) {
-	w.Write(data)
+// FormatRelativeTime formats a time as a relative string
+func FormatRelativeTime(t time.Time) string {
+	if t.IsZero() {
+		return "?"
+	}
+
+	now := time.Now()
+	seconds := now.Sub(t).Seconds()
+	minutes := seconds / 60
+	hours := minutes / 60
+	days := hours / 24
+
+	switch {
+	case seconds < 60:
+		return "just now"
+	case minutes < 60:
+		return fmt.Sprintf("%dm ago", int(minutes))
+	case hours < 24:
+		return fmt.Sprintf("%dh ago", int(hours))
+	case days < 7:
+		return fmt.Sprintf("%dd ago", int(days))
+	default:
+		return fmt.Sprintf("%dw ago", int(days/7))
+	}
 }

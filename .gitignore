@@ -1,6 +1,6 @@
-# Binaries
-try
-try.exe
+# Binaries (only at root level)
+/try
+/try.exe
 *.exe
 *.exe~
 *.dll

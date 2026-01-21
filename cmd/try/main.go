@@ -1,12 +1,18 @@
+// Package main is the entry point for the try CLI
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/amulcse/try/internal/config"
+	"github.com/amulcse/try/internal/tui"
 )
 
 func main() {
@@ -26,28 +32,28 @@ func main() {
 		disableColors = true
 	}
 	if disableColors {
-		DisableColors()
+		tui.DisableColors()
 	}
 
 	if containsFlag(args, "--help", "-h") {
-		printGlobalHelp(defaultTriesPath())
+		config.PrintHelp(config.DefaultTriesPath())
 		os.Exit(0)
 	}
 
 	if containsFlag(args, "--version", "-v") {
-		if BuildTime != "" {
-			fmt.Printf("try %s (built %s)\n", Version, BuildTime)
+		if config.BuildTime != "" {
+			fmt.Printf("try %s (built %s)\n", config.Version, config.BuildTime)
 		} else {
-			fmt.Printf("try %s\n", Version)
+			fmt.Printf("try %s\n", config.Version)
 		}
 		os.Exit(0)
 	}
 
 	triesPath := extractOptionWithValue(&args, "--path")
 	if triesPath == "" {
-		triesPath = defaultTriesPath()
+		triesPath = config.DefaultTriesPath()
 	} else {
-		triesPath = expandPath(triesPath)
+		triesPath = config.ExpandPath(triesPath)
 	}
 
 	andType := extractOptionWithValue(&args, "--and-type")
@@ -65,7 +71,7 @@ func main() {
 
 	switch command {
 	case "":
-		printGlobalHelp(triesPath)
+		config.PrintHelp(triesPath)
 		os.Exit(2)
 	case "clone":
 		cmds := cmdClone(args, triesPath)
@@ -169,10 +175,10 @@ func cmdInit(args []string, triesPath string) {
 	if err != nil {
 		scriptPath = os.Args[0]
 	}
-	scriptPath = expandPath(scriptPath)
+	scriptPath = config.ExpandPath(scriptPath)
 
 	if len(args) > 0 && strings.HasPrefix(args[0], "/") {
-		triesPath = expandPath(args[0])
+		triesPath = config.ExpandPath(args[0])
 		args = args[1:]
 	}
 
@@ -219,7 +225,7 @@ func cmdCd(args []string, triesPath, andType string, andExit bool, andKeys []str
 		pathArg := args[0]
 		args = args[1:]
 		custom := strings.Join(args, " ")
-		repoDir := expandPath(pathArg)
+		repoDir := config.ExpandPath(pathArg)
 		if pathArg == "." && strings.TrimSpace(custom) == "" {
 			fmt.Fprintln(os.Stderr, "Error: 'try .' requires a name argument")
 			fmt.Fprintln(os.Stderr, "Usage: try . <name>")
@@ -257,7 +263,7 @@ func cmdCd(args []string, triesPath, andType string, andExit bool, andKeys []str
 		return scriptClone(fullPath, gitURI)
 	}
 
-	selector := NewTrySelector(searchTerm, triesPath, andType, andExit, andKeys, andConfirm)
+	selector := tui.NewSelector(searchTerm, triesPath, andType, andExit, andKeys, andConfirm)
 	result := selector.Run()
 	if result == nil {
 		return nil
@@ -283,7 +289,7 @@ func repoDirFromArg(repo string) string {
 		}
 		return cwd
 	}
-	return expandPath(repo)
+	return config.ExpandPath(repo)
 }
 
 func worktreePath(triesPath, repoDir, customName string) string {
@@ -352,7 +358,7 @@ func scriptWorktree(path, repo string, explicit bool) []string {
 	return cmds
 }
 
-func scriptDelete(paths []DeletePath, basePath string) []string {
+func scriptDelete(paths []tui.DeletePath, basePath string) []string {
 	cmds := []string{fmt.Sprintf("cd %s", q(basePath))}
 	for _, item := range paths {
 		cmds = append(cmds, fmt.Sprintf("test -d %s && rm -rf %s", q(item.Basename), q(item.Basename)))
@@ -464,4 +470,170 @@ func splitTokens(spec string) []string {
 func regexpMustMatch(text, pattern string) bool {
 	matched, _ := regexp.MatchString(pattern, text)
 	return matched
+}
+
+// Utility functions
+
+func q(str string) string {
+	return "'" + strings.ReplaceAll(str, "'", "'\"'\"'") + "'"
+}
+
+func emitScript(cmds []string) {
+	fmt.Println(config.ScriptWarning)
+	for i, cmd := range cmds {
+		if i == 0 {
+			fmt.Print(cmd)
+		} else {
+			fmt.Print("  " + cmd)
+		}
+		if i < len(cmds)-1 {
+			fmt.Println(" && \\")
+		} else {
+			fmt.Println()
+		}
+	}
+}
+
+func removeFlag(args []string, flag string) ([]string, bool) {
+	removed := false
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == flag {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return filtered, removed
+}
+
+func containsFlag(args []string, flags ...string) bool {
+	for _, arg := range args {
+		for _, flag := range flags {
+			if arg == flag {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func extractOptionWithValue(args *[]string, optName string) string {
+	idx := -1
+	for i := len(*args) - 1; i >= 0; i-- {
+		arg := (*args)[i]
+		if arg == optName || strings.HasPrefix(arg, optName+"=") {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return ""
+	}
+	arg := (*args)[idx]
+	*args = append((*args)[:idx], (*args)[idx+1:]...)
+	if strings.Contains(arg, "=") {
+		parts := strings.SplitN(arg, "=", 2)
+		return parts[1]
+	}
+	if idx < len(*args) {
+		val := (*args)[idx]
+		*args = append((*args)[:idx], (*args)[idx+1:]...)
+		return val
+	}
+	return ""
+}
+
+func parseGitURI(uri string) (user string, repo string, host string, ok bool) {
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return "", "", "", false
+	}
+	uri = strings.TrimSuffix(uri, ".git")
+
+	if m := regexp.MustCompile(`^https?://github\.com/([^/]+)/([^/]+)`).FindStringSubmatch(uri); m != nil {
+		return m[1], m[2], "github.com", true
+	}
+	if m := regexp.MustCompile(`^git@github\.com:([^/]+)/([^/]+)`).FindStringSubmatch(uri); m != nil {
+		return m[1], m[2], "github.com", true
+	}
+	if m := regexp.MustCompile(`^https?://([^/]+)/([^/]+)/([^/]+)`).FindStringSubmatch(uri); m != nil {
+		return m[2], m[3], m[1], true
+	}
+	if m := regexp.MustCompile(`^git@([^:]+):([^/]+)/([^/]+)`).FindStringSubmatch(uri); m != nil {
+		return m[2], m[3], m[1], true
+	}
+	return "", "", "", false
+}
+
+func generateCloneDirectoryName(gitURI, customName string) (string, error) {
+	if strings.TrimSpace(customName) != "" {
+		return customName, nil
+	}
+	user, repo, _, ok := parseGitURI(gitURI)
+	if !ok {
+		return "", errors.New("unable to parse git URI")
+	}
+	datePrefix := time.Now().Format("2006-01-02")
+	return fmt.Sprintf("%s-%s-%s", datePrefix, user, repo), nil
+}
+
+func isGitURI(arg string) bool {
+	if arg == "" {
+		return false
+	}
+	return strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") ||
+		strings.HasPrefix(arg, "git@") || strings.Contains(arg, "github.com") ||
+		strings.Contains(arg, "gitlab.com") || strings.HasSuffix(arg, ".git")
+}
+
+func uniqueDirName(triesPath, dirName string) string {
+	candidate := dirName
+	counter := 2
+	for {
+		if _, err := os.Stat(filepath.Join(triesPath, candidate)); os.IsNotExist(err) {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s-%d", dirName, counter)
+		counter++
+	}
+}
+
+func resolveUniqueNameWithVersioning(triesPath, datePrefix, base string) string {
+	initial := fmt.Sprintf("%s-%s", datePrefix, base)
+	if _, err := os.Stat(filepath.Join(triesPath, initial)); os.IsNotExist(err) {
+		return base
+	}
+
+	re := regexp.MustCompile(`^(.*?)(\d+)$`)
+	if m := re.FindStringSubmatch(base); m != nil {
+		stem := m[1]
+		numStr := m[2]
+		var num int
+		_, _ = fmt.Sscanf(numStr, "%d", &num)
+		candidateNum := num + 1
+		for {
+			candidateBase := fmt.Sprintf("%s%d", stem, candidateNum)
+			candidateFull := filepath.Join(triesPath, fmt.Sprintf("%s-%s", datePrefix, candidateBase))
+			if _, err := os.Stat(candidateFull); os.IsNotExist(err) {
+				return candidateBase
+			}
+			candidateNum++
+		}
+	}
+
+	unique := uniqueDirName(triesPath, fmt.Sprintf("%s-%s", datePrefix, base))
+	unique = strings.TrimPrefix(unique, datePrefix+"-")
+	return unique
+}
+
+func fishShell() bool {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		out, err := exec.Command("ps", "c", "-p", fmt.Sprintf("%d", os.Getppid()), "-o", "ucomm=").Output()
+		if err == nil {
+			shell = strings.TrimSpace(string(out))
+		}
+	}
+	return strings.Contains(shell, "fish")
 }

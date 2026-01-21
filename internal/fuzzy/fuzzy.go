@@ -1,52 +1,63 @@
-package main
+// Package fuzzy provides fuzzy string matching
+package fuzzy
 
 import (
 	"math"
 	"strings"
 )
 
-type FuzzyEntry struct {
-	Data      TryItem
+// Item represents an item to be matched
+type Item struct {
+	Text      string
+	Path      string
+	BaseScore float64
+}
+
+// Entry is an internal representation for matching
+type Entry struct {
+	Data      Item
 	Text      string
 	TextLower string
 	BaseScore float64
 	TextRunes []rune
 }
 
-type Fuzzy struct {
-	Entries []FuzzyEntry
+// Matcher performs fuzzy matching on a set of entries
+type Matcher struct {
+	Entries []Entry
 }
 
-func NewFuzzy(entries []TryItem) *Fuzzy {
-	fe := make([]FuzzyEntry, 0, len(entries))
-	for _, e := range entries {
-		text := e.Text
-		fe = append(fe, FuzzyEntry{
-			Data:      e,
-			Text:      text,
-			TextLower: strings.ToLower(text),
-			BaseScore: e.BaseScore,
-			TextRunes: []rune(strings.ToLower(text)),
-		})
-	}
-	return &Fuzzy{Entries: fe}
-}
-
-type FuzzyMatch struct {
-	Entry     TryItem
+// Match represents a successful fuzzy match
+type Match struct {
+	Entry     Item
 	Positions []int
 	Score     float64
 }
 
-func (f *Fuzzy) Match(query string) []FuzzyMatch {
-	query = query
-	results := make([]FuzzyMatch, 0, len(f.Entries))
-	for _, entry := range f.Entries {
+// New creates a new fuzzy matcher
+func New(items []Item) *Matcher {
+	entries := make([]Entry, 0, len(items))
+	for _, item := range items {
+		entries = append(entries, Entry{
+			Data:      item,
+			Text:      item.Text,
+			TextLower: strings.ToLower(item.Text),
+			BaseScore: item.BaseScore,
+			TextRunes: []rune(strings.ToLower(item.Text)),
+		})
+	}
+	return &Matcher{Entries: entries}
+}
+
+// Match finds all entries matching the query
+func (m *Matcher) Match(query string) []Match {
+	results := make([]Match, 0, len(m.Entries))
+	for _, entry := range m.Entries {
 		score, positions, ok := calculateMatch(entry, query)
 		if !ok {
 			continue
 		}
-		results = append(results, FuzzyMatch{
+		results = append(results, Match{
 			Entry:     entry.Data,
 			Positions: positions,
 			Score:     score,
@@ -57,7 +68,7 @@ func (f *Fuzzy) Match(query string) []FuzzyMatch {
 	return results
 }
 
-func sortByScore(matches []FuzzyMatch) {
+func sortByScore(matches []Match) {
 	for i := 0; i < len(matches); i++ {
 		for j := i + 1; j < len(matches); j++ {
 			if matches[j].Score > matches[i].Score {
@@ -67,7 +78,7 @@ func sortByScore(matches []FuzzyMatch) {
 	}
 }
 
-func calculateMatch(entry FuzzyEntry, query string) (float64, []int, bool) {
+func calculateMatch(entry Entry, query string) (float64, []int, bool) {
 	positions := []int{}
 	score := entry.BaseScore
 	if query == "" {
@@ -130,4 +141,3 @@ var sqrtTable = func() []float64 {
 func isAlphaNum(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
 }
-

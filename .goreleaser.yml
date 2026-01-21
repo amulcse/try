@@ -9,6 +9,7 @@ before:
 
 builds:
   - id: try
+    main: ./cmd/try
     binary: try
     env:
       - CGO_ENABLED=0
@@ -24,8 +25,8 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.BuildTime={{.Date}}
+      - -X github.com/amulcse/try/internal/config.Version={{.Version}}
+      - -X github.com/amulcse/try/internal/config.BuildTime={{.Date}}
 
 archives:
   - id: default
@@ -74,7 +75,7 @@ release:
     tar -xzf try_darwin_arm64.tar.gz && sudo mv try /usr/local/bin/
     
     # Or use Go
-    go install github.com/amulcse/try@latest
+    go install github.com/amulcse/try/cmd/try@latest
     ```
   footer: |
     ---

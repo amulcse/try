@@ -1,15 +1,15 @@
 #!/bin/bash
 #
-# try-go installer
+# try installer
 # A Go port of https://github.com/tobi/try
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/try-go/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/amulcse/try/main/scripts/install.sh | bash
 #
 
 set -e
 
-REPO="YOUR_USERNAME/try-go"
+REPO="amulcse/try"
 BINARY_NAME="try"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
@@ -68,29 +68,20 @@ detect_platform() {
     info "Detected platform: $PLATFORM"
 }
 
-# Get latest release version
-get_latest_version() {
-    VERSION=$(curl -sI "https://github.com/${REPO}/releases/latest" | grep -i "location:" | sed 's/.*tag\///' | tr -d '\r\n')
-    if [ -z "$VERSION" ]; then
-        error "Failed to get latest version"
-    fi
-    info "Latest version: $VERSION"
-}
-
 # Download and install
 install() {
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/try-go_${VERSION#v}_${PLATFORM}.tar.gz"
+    DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/try_${PLATFORM}.tar.gz"
     
     info "Downloading from: $DOWNLOAD_URL"
     
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
     
-    if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/try-go.tar.gz"; then
+    if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/try.tar.gz"; then
         error "Failed to download release"
     fi
     
-    tar -xzf "$TMP_DIR/try-go.tar.gz" -C "$TMP_DIR"
+    tar -xzf "$TMP_DIR/try.tar.gz" -C "$TMP_DIR"
     
     # Check if we need sudo
     if [ -w "$INSTALL_DIR" ]; then
@@ -112,13 +103,17 @@ verify() {
         echo ""
         $BINARY_NAME --version
         echo ""
-        echo "Add to your shell config:"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "⚠️  IMPORTANT: Add to your shell config:"
         echo ""
         echo "  # Bash/Zsh - add to ~/.bashrc or ~/.zshrc"
         echo '  eval "$(try init)"'
         echo ""
         echo "  # Fish - add to ~/.config/fish/config.fish"
         echo '  eval (try init | string collect)'
+        echo ""
+        echo "Then restart your terminal or run: source ~/.zshrc"
         echo ""
     else
         warn "Installation completed but 'try' not found in PATH"
@@ -129,13 +124,12 @@ verify() {
 main() {
     echo ""
     echo "╔═══════════════════════════════════════════════╗"
-    echo "║  try-go installer                             ║"
+    echo "║  try installer                                ║"
     echo "║  A Go port of github.com/tobi/try             ║"
     echo "╚═══════════════════════════════════════════════╝"
     echo ""
     
     detect_platform
-    get_latest_version
     install
     verify
 }

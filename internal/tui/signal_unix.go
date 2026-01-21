@@ -1,6 +1,6 @@
 //go:build !windows
 
-package main
+package tui
 
 import (
 	"os"
@@ -8,7 +8,8 @@ import (
 	"syscall"
 )
 
-func setupResizeHandler(callback func()) {
+// SetupResizeHandler sets up a handler for terminal resize events (Unix only)
+func SetupResizeHandler(callback func()) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGWINCH)
 	go func() {
