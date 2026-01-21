@@ -1,0 +1,82 @@
+# GoReleaser configuration
+version: 2
+
+project_name: try
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: try
+    binary: try
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.BuildTime={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: amulcse
+    name: try
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+  header: |
+    ## try v{{.Version}}
+    
+    A Go port of [tobi/try](https://github.com/tobi/try) - fresh directories for every vibe 🏠
+    
+    ### Installation
+    
+    ```bash
+    # macOS/Linux
+    curl -fsSL https://raw.githubusercontent.com/amulcse/try/main/install.sh | bash
+    
+    # Go
+    go install github.com/amulcse/try@v{{.Version}}
+    ```
+  footer: |
+    ---
+    All credit for the original idea goes to [Tobi Lütke](https://github.com/tobi) and [try](https://github.com/tobi/try).

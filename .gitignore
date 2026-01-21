@@ -1,0 +1,41 @@
+# Binaries
+try
+try.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build output
+dist/
+/bin/
+
+# Test binary
+*.test
+*.out
+coverage.html
+
+# Go workspace
+go.work
+go.work.sum
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+debug
+__debug_bin*
+
+# Local
+.env
+.env.local
