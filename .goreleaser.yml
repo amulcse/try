@@ -1,5 +1,4 @@
-# GoReleaser configuration
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# GoReleaser configuration (v1 compatible)
 version: 1
 
 project_name: try
@@ -30,12 +29,10 @@ builds:
 
 archives:
   - id: default
-    formats:
-      - tar.gz
+    format: tar.gz
     format_overrides:
       - goos: windows
-        formats:
-          - zip
+        format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
@@ -45,7 +42,7 @@ checksum:
   name_template: "checksums.txt"
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -72,11 +69,12 @@ release:
     ### Installation
     
     ```bash
-    # macOS/Linux
-    curl -fsSL https://raw.githubusercontent.com/amulcse/try/main/install.sh | bash
+    # macOS (Apple Silicon)
+    curl -LO https://github.com/amulcse/try/releases/latest/download/try_darwin_arm64.tar.gz
+    tar -xzf try_darwin_arm64.tar.gz && sudo mv try /usr/local/bin/
     
-    # Go
-    go install github.com/amulcse/try@v{{.Version}}
+    # Or use Go
+    go install github.com/amulcse/try@latest
     ```
   footer: |
     ---
