@@ -85,10 +85,11 @@ brews:
     repository:
       owner: amulcse
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/amulcse/try"
     description: "Fresh directories for every vibe - ephemeral workspace manager"
     license: "MIT"
-    folder: Formula
+    directory: Formula
     install: |
       bin.install "try"
     caveats: |
