@@ -24,41 +24,34 @@ Download the binary for your platform, make it executable, and move to your PATH
 
 **macOS (Apple Silicon):**
 ```bash
-curl -LO https://github.com/amulcse/try/releases/latest/download/try_darwin_arm64.tar.gz
-tar -xzf try_darwin_arm64.tar.gz
-chmod +x try
-sudo mv try /usr/local/bin/
+curl -L -o try.tar.gz $(curl -s https://api.github.com/repos/amulcse/try/releases/latest | grep "browser_download_url.*darwin_arm64.tar.gz" | cut -d '"' -f 4)
+tar -xzf try.tar.gz && chmod +x try && sudo mv try /usr/local/bin/
 ```
 
 **macOS (Intel):**
 ```bash
-curl -LO https://github.com/amulcse/try/releases/latest/download/try_darwin_amd64.tar.gz
-tar -xzf try_darwin_amd64.tar.gz
-chmod +x try
-sudo mv try /usr/local/bin/
+curl -L -o try.tar.gz $(curl -s https://api.github.com/repos/amulcse/try/releases/latest | grep "browser_download_url.*darwin_amd64.tar.gz" | cut -d '"' -f 4)
+tar -xzf try.tar.gz && chmod +x try && sudo mv try /usr/local/bin/
 ```
 
 **Linux (x64):**
 ```bash
-curl -LO https://github.com/amulcse/try/releases/latest/download/try_linux_amd64.tar.gz
-tar -xzf try_linux_amd64.tar.gz
-chmod +x try
-sudo mv try /usr/local/bin/
+curl -L -o try.tar.gz $(curl -s https://api.github.com/repos/amulcse/try/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | cut -d '"' -f 4)
+tar -xzf try.tar.gz && chmod +x try && sudo mv try /usr/local/bin/
 ```
 
 **Linux (arm64):**
 ```bash
-curl -LO https://github.com/amulcse/try/releases/latest/download/try_linux_arm64.tar.gz
-tar -xzf try_linux_arm64.tar.gz
-chmod +x try
-sudo mv try /usr/local/bin/
+curl -L -o try.tar.gz $(curl -s https://api.github.com/repos/amulcse/try/releases/latest | grep "browser_download_url.*linux_arm64.tar.gz" | cut -d '"' -f 4)
+tar -xzf try.tar.gz && chmod +x try && sudo mv try /usr/local/bin/
 ```
 
 **Windows (PowerShell):**
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/amulcse/try/releases/latest/download/try_windows_amd64.zip" -OutFile "try.zip"
-Expand-Archive -Path "try.zip" -DestinationPath "."
-Move-Item -Path "try.exe" -Destination "$env:USERPROFILE\bin\try.exe"
+$url = (Invoke-RestMethod https://api.github.com/repos/amulcse/try/releases/latest).assets | Where-Object { $_.name -like "*windows_amd64.zip" } | Select-Object -ExpandProperty browser_download_url
+Invoke-WebRequest -Uri $url -OutFile "try.zip"
+Expand-Archive -Path "try.zip" -DestinationPath "." -Force
+Move-Item -Path "try.exe" -Destination "$env:USERPROFILE\bin\try.exe" -Force
 ```
 
 ### Go Install
