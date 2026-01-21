@@ -1,5 +1,6 @@
 # GoReleaser configuration
-version: 2
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 1
 
 project_name: try
 
