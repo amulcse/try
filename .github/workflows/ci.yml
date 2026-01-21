@@ -35,4 +35,4 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build -o try${{ matrix.goos == 'windows' && '.exe' || '' }} .
+        run: go build -o try${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/try
